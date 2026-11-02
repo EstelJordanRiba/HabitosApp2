@@ -7,6 +7,7 @@ import 'editar_habito_page.dart';
 import 'estadisticas_page.dart';
 import 'administracion_page.dart';
 import 'login_page.dart';
+import 'ajustes_screen.dart';
 
 class HabitosPage extends StatefulWidget {
   final Usuario usuario;
@@ -29,7 +30,11 @@ class _HabitosPageState extends State<HabitosPage> {
 
   Future<void> _cargarHabitos() async {
     setState(() {
-      _habitos = _datos.obtenerHabitos(widget.usuario.id);
+      final todos = _datos.obtenerHabitos(widget.usuario.id);
+      // Ajuste "Ocultar hábitos completados hoy"
+      _habitos = _datos.ocultarCompletados
+          ? todos.where((h) => !h.completadoHoy).toList()
+          : todos;
     });
   }
 
@@ -49,6 +54,26 @@ class _HabitosPageState extends State<HabitosPage> {
       ),
     );
     if (guardado == true) await _cargarHabitos();
+  }
+
+  Future<void> _abrirAjustes() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AjustesScreen(
+          usuario: widget.usuario,
+          onAppSettingsChanged: _cargarHabitos,
+          onResetApp: () {
+            // Tras borrar los datos, vuelve al login y cierra la sesión
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginPage()),
+                  (route) => false,
+            );
+          },
+        ),
+      ),
+    );
+    if (mounted) await _cargarHabitos();
   }
 
   Future<void> _confirmarEliminar(Habito habito) async {
@@ -107,6 +132,11 @@ class _HabitosPageState extends State<HabitosPage> {
               },
             ),
           IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Ajustes',
+            onPressed: _abrirAjustes,
+          ),
+          IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Cerrar sesión',
             onPressed: () => Navigator.pushReplacement(
@@ -117,29 +147,31 @@ class _HabitosPageState extends State<HabitosPage> {
         ],
       ),
       body: _habitos.isEmpty
-          ? const Center(
-              child: Text(
-                'Todavía no tienes hábitos.\nPulsa + para crear uno.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: Colors.grey),
-              ),
-            )
+          ? Center(
+        child: Text(
+          _datos.ocultarCompletados
+              ? 'No hay hábitos pendientes hoy.\nPulsa + para crear uno.'
+              : 'Todavía no tienes hábitos.\nPulsa + para crear uno.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      )
           : ListView.builder(
-              padding: const EdgeInsets.all(12),
-              itemCount: _habitos.length,
-              itemBuilder: (context, i) {
-                final h = _habitos[i];
-                return TarjetaHabito(
-                  nombre: h.nombre,
-                  color: h.color,
-                  icono: h.icono,
-                  completadoHoy: h.completadoHoy,
-                  onCompletar: () => _completar(h),
-                  onEditar: () => _abrirEditor(h),
-                  onEliminar: () => _confirmarEliminar(h),
-                );
-              },
-            ),
+        padding: const EdgeInsets.all(12),
+        itemCount: _habitos.length,
+        itemBuilder: (context, i) {
+          final h = _habitos[i];
+          return TarjetaHabito(
+            nombre: h.nombre,
+            color: h.color,
+            icono: h.icono,
+            completadoHoy: h.completadoHoy,
+            onCompletar: () => _completar(h),
+            onEditar: () => _abrirEditor(h),
+            onEliminar: () => _confirmarEliminar(h),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _abrirEditor(null),
         child: const Icon(Icons.add),
