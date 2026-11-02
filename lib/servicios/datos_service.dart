@@ -16,6 +16,21 @@ class DatosService {
   final List<Usuario> _usuarios = [];
   final List<Habito> _habitos = [];
 
+  // AJUSTES (en memoria)
+  bool isDarkMode = false;
+  double tamanoLetra = 16.0;
+  bool ocultarCompletados = false;
+
+  /// Devuelve la app a su estado inicial (datos de ejemplo y ajustes por defecto)
+  void restablecerDatos() {
+    _usuarios.clear();
+    _habitos.clear();
+    isDarkMode = false;
+    tamanoLetra = 16.0;
+    ocultarCompletados = false;
+    _inicializarDatos();
+  }
+
   void _inicializarDatos() {
     final fechaBase = DateTime.now().subtract(const Duration(days: 15));
 
@@ -86,8 +101,8 @@ class DatosService {
   Usuario? login(String usuario, String password) {
     try {
       return _usuarios.firstWhere(
-        (u) =>
-            u.usuario.trim().toLowerCase() == usuario.trim().toLowerCase() &&
+            (u) =>
+        u.usuario.trim().toLowerCase() == usuario.trim().toLowerCase() &&
             u.password == password,
       );
     } catch (_) {
@@ -97,7 +112,7 @@ class DatosService {
 
   bool registrarUsuario(Usuario usuario) {
     final existe = _usuarios.any(
-      (u) => u.usuario.trim().toLowerCase() == usuario.usuario.trim().toLowerCase(),
+          (u) => u.usuario.trim().toLowerCase() == usuario.usuario.trim().toLowerCase(),
     );
     if (existe) return false;
 
