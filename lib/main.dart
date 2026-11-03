@@ -1,46 +1,73 @@
 import 'package:flutter/material.dart';
 import 'pantallas/login_page.dart';
+import 'pantallas/habitos_page.dart';
 import 'servicios/datos_service.dart';
 
-// Punto de entrada principal de la aplicación Flutter
-void main() {
-  // Garantiza que la infraestructura de Flutter esté totalmente lista antes de arrancar
+// ============================================================================
+// ARCHIVO: main.dart
+// FUNCIÓN: Punto de entrada raíz de la aplicación HábitosApp (DAM2)
+// EXPLICACIÓN:
+// Este archivo inicializa el motor de Flutter, restaura la sesión persistida
+// en SharedPreferences y la base de datos SQLite antes de renderizar la app,
+// y configura el tema visual reactivo (modo claro/oscuro y tamaño de letra).
+// ============================================================================
+
+Future<void> main() async {
+  // Garantiza que los bindings del framework de Flutter estén totalmente listos
+  // antes de realizar llamadas asíncronas a SQLite o SharedPreferences.
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Carga preferencias de usuario y comprueba si existe una sesión activa guardada
+  await DatosService().init();
+
+  // Inicia la ejecución de la app Flutter
   runApp(const HabitosApp());
 }
 
-// Widget raíz de la aplicación (StatelessWidget porque la configuración global la gestiona MaterialApp)
+// Widget raíz de tipo StatelessWidget.
+// La reactividad del tema visual se gestiona escuchando a DatosService mediante ListenableBuilder.
 class HabitosApp extends StatelessWidget {
   const HabitosApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Obtenemos la instancia del servicio de datos
+    // Obtenemos la instancia única (Singleton) del servicio de datos
     final datos = DatosService();
 
-    // ListenableBuilder escucha cambios en DatosService (por ejemplo, si el usuario cambia el tema o el tamaño de letra)
-    // y redibuja automáticamente la aplicación para aplicar las preferencias del usuario.
+    // Determinamos la pantalla de inicio al arrancar:
+    // Si SharedPreferences recordaba al usuario en sesión, entra directo a HabitosPage.
+    // De lo contrario, solicita autenticación mostrando LoginPage.
+    final Widget pantallaInicial = datos.usuarioActual != null
+        ? HabitosPage(usuario: datos.usuarioActual!)
+        : const LoginPage();
+
+    // ListenableBuilder: Se activa cada vez que DatosService llama a notifyListeners()
+    // (por ejemplo, cuando el usuario altera el tema claro/oscuro o la escala de letra en Ajustes).
     return ListenableBuilder(
       listenable: datos,
       builder: (context, _) {
         return MaterialApp(
           title: 'HábitosApp',
-          debugShowCheckedModeBanner: false, // Oculta la marca de agua 'DEBUG' en la esquina
-          // Tema claro con color semilla Teal (verde azulado)
+          debugShowCheckedModeBanner: false, // Oculta el cartelito 'DEBUG' en la esquina de la pantalla
+
+          // Tema claro con color semilla Teal
           theme: ThemeData(
             colorSchemeSeed: Colors.teal,
             useMaterial3: true,
             brightness: Brightness.light,
           ),
+
           // Tema oscuro con color semilla Teal
           darkTheme: ThemeData(
             colorSchemeSeed: Colors.teal,
             useMaterial3: true,
             brightness: Brightness.dark,
           ),
-          // Alterna entre modo claro u oscuro según lo seleccionado en DatosService
+
+          // Selección del tema según el booleano guardado en SharedPreferences
           themeMode: datos.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-          // Ajusta dinámicamente la escala global del texto en toda la app según las opciones de accesibilidad
+
+          // Escalado de fuente dinámico para toda la interfaz gráfica de la app
           builder: (context, child) {
             return MediaQuery(
               data: MediaQuery.of(context).copyWith(
@@ -49,8 +76,9 @@ class HabitosApp extends StatelessWidget {
               child: child!,
             );
           },
-          // Definimos LoginPage como la pantalla inicial de la aplicación
-          home: const LoginPage(),
+
+          // Carga la pantalla inicial calculada según la sesión activa
+          home: pantallaInicial,
         );
       },
     );

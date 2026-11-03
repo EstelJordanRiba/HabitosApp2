@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
@@ -31,8 +32,18 @@ class DatabaseHelper {
     return await openDatabase(
       path,
       version: 1,
+      // Activa las claves foráneas (ON DELETE CASCADE)
+      onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
     );
+  }
+
+  // Borra el archivo de la base de datos. Al volver a abrirla se crea de nuevo con los datos de ejemplo
+  Future<void> borrarBaseDatos() async {
+    final path = join(await getDatabasesPath(), 'habitos_app.db');
+    await _database?.close();
+    _database = null;
+    await deleteDatabase(path);
   }
 
   // Creación de las 3 tablas requeridas: usuarios, habitos y estadisticas
@@ -83,6 +94,10 @@ class DatabaseHelper {
   Future<void> _insertarDatosIniciales(Database db) async {
     final fechaBase = DateTime.now().subtract(const Duration(days: 10)).toIso8601String();
 
+    // Devuelve las fechas (yyyy-MM-dd) de hace n días, para que los datos de ejemplo sean coherentes
+    String hace(int dias) =>
+        DateTime.now().subtract(Duration(days: dias)).toIso8601String().split('T').first;
+
     // 1. Usuario Administrador
     final adminId = await db.insert('usuarios', {
       'usuario': 'admin',
@@ -105,36 +120,37 @@ class DatabaseHelper {
       'rol': 'usuario',
     });
 
-    // Hábitos iniciales para Usuario Estándar
+    // Hábito 1: completado hoy y los 4 días anteriores -> racha 5, total 5
     final h1Id = await db.insert('habitos', {
       'usuario_id': userId,
       'nombre': 'Hacer Ejercicio',
       'color': Colors.teal.value,
       'icono': Icons.fitness_center.codePoint,
-      'fechas_completado': '["2026-03-01", "2026-03-02"]',
+      'fechas_completado': jsonEncode([hace(4), hace(3), hace(2), hace(1), hace(0)]),
       'completado_hoy': 1,
     });
     await db.insert('estadisticas', {
       'habito_id': h1Id,
       'racha_actual': 5,
-      'total_dias_completados': 12,
+      'total_dias_completados': 5,
     });
 
+    // Hábito 2: completado los 3 días anteriores, hoy pendiente -> racha 3, total 3
     final h2Id = await db.insert('habitos', {
       'usuario_id': userId,
       'nombre': 'Leer 20 Minutos',
       'color': Colors.orange.value,
       'icono': Icons.menu_book.codePoint,
-      'fechas_completado': '["2026-03-01"]',
+      'fechas_completado': jsonEncode([hace(3), hace(2), hace(1)]),
       'completado_hoy': 0,
     });
     await db.insert('estadisticas', {
       'habito_id': h2Id,
       'racha_actual': 3,
-      'total_dias_completados': 8,
+      'total_dias_completados': 3,
     });
 
-    // Hábito inicial para Administrador
+    // Hábito del Administrador: sin completar -> racha 0, total 0
     final hAdminId = await db.insert('habitos', {
       'usuario_id': adminId,
       'nombre': 'Revisar métricas del sistema',
@@ -145,8 +161,8 @@ class DatabaseHelper {
     });
     await db.insert('estadisticas', {
       'habito_id': hAdminId,
-      'racha_actual': 2,
-      'total_dias_completados': 4,
+      'racha_actual': 0,
+      'total_dias_completados': 0,
     });
   }
 
@@ -373,3 +389,4 @@ class DatabaseHelper {
     return prefs.getBool(_keyOcultarCompletados) ?? false;
   }
 }
+s

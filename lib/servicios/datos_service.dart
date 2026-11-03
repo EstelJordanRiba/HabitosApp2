@@ -13,9 +13,7 @@ class DatosService extends ChangeNotifier {
     return _instance;
   }
 
-  DatosService._internal() {
-    _cargarPreferencias();
-  }
+  DatosService._internal();
 
   final _dbHelper = DatabaseHelper.instance;
 
@@ -23,6 +21,7 @@ class DatosService extends ChangeNotifier {
   bool _isDarkMode = false;
   double _tamanoLetra = 16.0;
   bool _ocultarCompletados = false;
+  bool _inicializado = false;
 
   Usuario? get usuarioActual => _usuarioActual;
   bool get esAdmin => _usuarioActual?.esAdmin ?? false;
@@ -48,21 +47,27 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Carga preferencias locales guardadas en SharedPreferences
-  Future<void> _cargarPreferencias() async {
+  // ==========================================
+  // INICIO: se llama desde main() antes de arrancar la app
+  // Carga los ajustes y la sesión guardados en SharedPreferences
+  // ==========================================
+  Future<void> init() async {
+    if (_inicializado) return;
     _isDarkMode = await _dbHelper.getDarkMode();
     _tamanoLetra = await _dbHelper.getTamanoLetra();
     _ocultarCompletados = await _dbHelper.getOcultarCompletados();
 
-    // Intentar recuperar sesión activa en SharedPreferences
+    // Si había una sesión abierta, recupera el usuario desde SQLite
     final sesionUserId = await _dbHelper.getSesionUsuarioId();
     if (sesionUserId != null) {
       _usuarioActual = await _dbHelper.getUsuarioById(sesionUserId);
     }
+    _inicializado = true;
     notifyListeners();
   }
 
-  // Restablece preferencias y borra sesión activa
+  // Borra la base de datos SQLite (se vuelve a crear con los datos de ejemplo)
+  // y restablece los ajustes y la sesión de SharedPreferences
   Future<void> restablecerDatos() async {
     _usuarioActual = null;
     _isDarkMode = false;
@@ -72,8 +77,34 @@ class DatosService extends ChangeNotifier {
     await _dbHelper.saveDarkMode(false);
     await _dbHelper.saveTamanoLetra(16.0);
     await _dbHelper.saveOcultarCompletados(false);
+    await _dbHelper.borrarBaseDatos();
     notifyListeners();
   }
+
+  // ==========================================
+  // CÁLCULO DE ESTADÍSTICAS A PARTIR DE LAS FECHAS
+  // ==========================================
+
+  static String _fecha(DateTime d) => d.toIso8601String().split('T').first;
+
+  // Racha actual: días seguidos completados hasta hoy (o hasta ayer si hoy aún no se ha hecho)
+  static int calcularRacha(List<String> fechas) {
+    final set = fechas.toSet();
+    var dia = DateTime.now();
+    if (!set.contains(_fecha(dia))) {
+      dia = dia.subtract(const Duration(days: 1));
+    }
+    int racha = 0;
+    while (set.contains(_fecha(dia))) {
+      racha++;
+      dia = dia.subtract(const Duration(days: 1));
+    }
+    return racha;
+  }
+
+  // ==========================================
+  // USUARIOS: login, registro y CRUD (administrador)
+  // ==========================================
 
   // LOGIN: Consulta en la tabla 'usuarios' de SQLite y guarda la sesión en SharedPreferences
   Future<Usuario?> login(String usuario, String password) async {
@@ -96,7 +127,7 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // REGISTRO DE USUARIO: Inserta en la tabla 'usuarios' de SQLite
+  // C: REGISTRO DE USUARIO en la tabla 'usuarios'
   Future<bool> registrarUsuario({
     required String usuario,
     required String nombre,
@@ -123,23 +154,44 @@ class DatosService extends ChangeNotifier {
     return true;
   }
 
-  // HÁBITOS: CRUD completo en SQLite
-
-  // R: Obtener hábitos de un usuario específico
-  Future<List<Habito>> obtenerHabitos(int usuarioId) async {
-    final todos = await _dbHelper.getHabitosByUsuario(usuarioId);
-    if (_ocultarCompletados) {
-      return todos.where((h) => !h.completadoHoy).toList();
-    }
-    return todos;
+  // R: Todos los usuarios (administrador)
+  Future<List<Usuario>> obtenerUsuarios() async {
+    return await _dbHelper.getUsuarios();
   }
 
-  // R: Obtener todos los hábitos (Rol Administrador)
+  // U: Actualizar usuario (administrador)
+  Future<bool> actualizarUsuario(Usuario usuario) async {
+    // Comprueba que el nombre de usuario no lo tenga otra persona
+    final otro = await _dbHelper.getUsuarioByUsername(usuario.usuario);
+    if (otro != null && otro.id != usuario.id) return false;
+
+    await _dbHelper.updateUsuario(usuario);
+    if (_usuarioActual?.id == usuario.id) _usuarioActual = usuario;
+    notifyListeners();
+    return true;
+  }
+
+  // D: Eliminar usuario y sus hábitos (administrador)
+  Future<void> eliminarUsuario(int usuarioId) async {
+    await _dbHelper.deleteUsuario(usuarioId);
+    notifyListeners();
+  }
+
+  // ==========================================
+  // HÁBITOS: CRUD completo en SQLite
+  // ==========================================
+
+  // R: Hábitos de un usuario (el filtro "ocultar completados" se aplica en HabitosPage)
+  Future<List<Habito>> obtenerHabitos(int usuarioId) async {
+    return await _dbHelper.getHabitosByUsuario(usuarioId);
+  }
+
+  // R: Todos los hábitos (administrador)
   Future<List<Habito>> obtenerTodosLosHabitos() async {
     return await _dbHelper.getAllHabitos();
   }
 
-  // C: Crear Hábito en la tabla 'habitos'
+  // C: Crear hábito (también crea su fila en 'estadisticas')
   Future<void> crearHabito(int usuarioId, String nombre, Color color, IconData icono) async {
     final nuevoHabito = Habito(
       usuarioId: usuarioId,
@@ -154,7 +206,7 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // U: Modificar Hábito
+  // U: Modificar hábito
   Future<void> editarHabito(Habito habito, String nombre, Color color, IconData icono) async {
     final habitoActualizado = habito.copyWith(
       nombre: nombre,
@@ -166,17 +218,17 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // D: Eliminar Hábito
+  // D: Eliminar hábito (y su estadística)
   Future<void> eliminarHabito(int habitoId) async {
     await _dbHelper.deleteHabito(habitoId);
     notifyListeners();
   }
 
-  // COMPLETAR HÁBITO: Actualiza 'habitos' y recalcula la racha/total en la tabla 'estadisticas'
+  // COMPLETAR HÁBITO: añade o quita la fecha de hoy y recalcula la estadística
   Future<void> completarHabito(Habito habito) async {
     if (habito.id == null) return;
 
-    final hoyStr = DateTime.now().toIso8601String().split('T').first;
+    final hoyStr = _fecha(DateTime.now());
     final nuevoEstado = !habito.completadoHoy;
 
     final nuevasFechas = List<String>.from(habito.fechasCompletado);
@@ -190,49 +242,59 @@ class DatosService extends ChangeNotifier {
       completadoHoy: nuevoEstado,
       fechasCompletado: nuevasFechas,
     );
-
     await _dbHelper.updateHabito(habitoModificado);
 
-    // Actualizar tabla 'estadisticas'
-    final estActual = await _dbHelper.getEstadisticaByHabito(habito.id!);
-    int racha = estActual?.rachaActual ?? 0;
-    int total = estActual?.totalDiasCompletados ?? 0;
-
-    if (nuevoEstado) {
-      racha += 1;
-      total += 1;
-    } else {
-      racha = racha > 0 ? racha - 1 : 0;
-      total = total > 0 ? total - 1 : 0;
-    }
-
-    final estNueva = Estadistica(
-      id: estActual?.id,
-      habitoId: habito.id!,
-      rachaActual: racha,
-      totalDiasCompletados: total,
-    );
-
-    await _dbHelper.updateEstadistica(estNueva);
+    await _guardarEstadistica(habito.id!, nuevasFechas);
     notifyListeners();
   }
 
-  // ESTADÍSTICAS: Obtener datos de la tabla 'estadisticas'
+  // Calcula racha y total desde las fechas y lo guarda en 'estadisticas'
+  Future<void> _guardarEstadistica(int habitoId, List<String> fechas) async {
+    final estActual = await _dbHelper.getEstadisticaByHabito(habitoId);
+    final estNueva = Estadistica(
+      id: estActual?.id,
+      habitoId: habitoId,
+      rachaActual: calcularRacha(fechas),
+      totalDiasCompletados: fechas.toSet().length,
+    );
+
+    if (estActual == null) {
+      await _dbHelper.insertEstadistica(estNueva);
+    } else {
+      await _dbHelper.updateEstadistica(estNueva);
+    }
+  }
+
+  // ==========================================
+  // ESTADÍSTICAS: CRUD completo en SQLite
+  // ==========================================
+
+  // R: Estadística de un hábito
   Future<Estadistica?> obtenerEstadistica(int habitoId) async {
     return await _dbHelper.getEstadisticaByHabito(habitoId);
   }
 
+  // R: Todas las estadísticas (administrador)
   Future<List<Estadistica>> obtenerTodasLasEstadisticas() async {
     return await _dbHelper.getAllEstadisticas();
   }
 
-  // USUARIOS (Rol Administrador): CRUD en SQLite
-  Future<List<Usuario>> obtenerUsuarios() async {
-    return await _dbHelper.getUsuarios();
+  // C: Crear estadística (administrador), calculada desde las fechas del hábito
+  Future<void> crearEstadistica(Habito habito) async {
+    if (habito.id == null) return;
+    await _guardarEstadistica(habito.id!, habito.fechasCompletado);
+    notifyListeners();
   }
 
-  Future<void> eliminarUsuario(int usuarioId) async {
-    await _dbHelper.deleteUsuario(usuarioId);
+  // U: Actualizar estadística a mano (administrador)
+  Future<void> actualizarEstadistica(Estadistica est) async {
+    await _dbHelper.updateEstadistica(est);
+    notifyListeners();
+  }
+
+  // D: Eliminar estadística (administrador)
+  Future<void> eliminarEstadistica(int habitoId) async {
+    await _dbHelper.deleteEstadisticaByHabito(habitoId);
     notifyListeners();
   }
 }

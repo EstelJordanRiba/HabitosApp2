@@ -1,15 +1,22 @@
-// Modelo de Datos: Usuario
-// Representa la tabla 'usuarios' en la base de datos local SQLite
+// ============================================================================
+// ARCHIVO: usuario.dart (Ubicación: lib/modelos/usuario.dart)
+// FUNCIÓN: Modelo de Datos para la entidad 'Usuario'
+// EXPLICACIÓN DAM2:
+// Representa la estructura de la tabla 'usuarios' en la base de datos local SQLite.
+// Incluye métodos para mapear datos desde/hacia Mapa (JSON / Filas de SQLite).
+// ============================================================================
+
 class Usuario {
-  final int? id;               // Identificador único (Clave primaria autoincremental en SQLite)
-  final String usuario;        // Nombre de usuario único para login
+  final int? id;               // Clave Primaria Autoincremental en SQLite (null antes de insertarse)
+  final String usuario;        // Nombre de usuario único para inicio de sesión (credencial)
   final String nombre;         // Nombre de pila del usuario
   final String apellidos;      // Apellidos del usuario
-  final String email;          // Correo electrónico del usuario
+  final String email;          // Correo electrónico
   final String password;       // Contraseña de acceso
-  final DateTime fechaCreacion;// Fecha de creación de la cuenta (fecha_creacion)
-  final String rol;            // Rol del usuario: 'administrador' o 'usuario'
+  final DateTime fechaCreacion;// Fecha y hora de alta asignada automáticamente
+  final String rol;            // Rol en el sistema: 'administrador' o 'usuario'
 
+  // Constructor con parámetros nombrados y rol por defecto 'usuario'
   Usuario({
     this.id,
     required this.usuario,
@@ -21,10 +28,10 @@ class Usuario {
     this.rol = 'usuario',
   });
 
-  // Comprueba si el usuario tiene rol de administrador
+  // Getter auxiliar para evaluar rápidamente si el usuario tiene privilegios de administrador
   bool get esAdmin => rol == 'administrador';
 
-  // Convierte el objeto Usuario a un Mapa para insertarlo/actualizarlo en la tabla 'usuarios' de SQLite
+  // Convierte el objeto Usuario a un Mapa (clave-valor) para insertarlo o actualizarlo en SQLite
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -33,12 +40,12 @@ class Usuario {
       'apellidos': apellidos,
       'email': email,
       'password': password,
-      'fecha_creacion': fechaCreacion.toIso8601String(),
+      'fecha_creacion': fechaCreacion.toIso8601String(), // Convierte DateTime a cadena ISO 8601 para SQLite
       'rol': rol,
     };
   }
 
-  // Construye un objeto Usuario a partir de la fila leída de la base de datos SQLite
+  // Constructor de fábrica (factory) para reconstruir el objeto Usuario desde un Mapa leido de SQLite
   factory Usuario.fromMap(Map<String, dynamic> map) {
     return Usuario(
       id: map['id'] is int ? map['id'] : int.tryParse(map['id']?.toString() ?? ''),
@@ -54,7 +61,7 @@ class Usuario {
     );
   }
 
-  // Copia el objeto cambiando propiedades específicas
+  // Método copyWith para obtener una copia inmutable del objeto modificando campos específicos
   Usuario copyWith({
     int? id,
     String? usuario,

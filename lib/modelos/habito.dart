@@ -58,7 +58,8 @@ class Habito {
           ? IconData(map['icono'], fontFamily: 'MaterialIcons')
           : Icons.star,
       fechasCompletado: fechas,
-      completadoHoy: (map['completado_hoy'] ?? 0) == 1,
+      // Se calcula con las fechas: así se reinicia solo al cambiar de día
+      completadoHoy: fechas.contains(DateTime.now().toIso8601String().split('T').first),
     );
   }
 

@@ -35,7 +35,12 @@ class _HabitosPageState extends State<HabitosPage> {
   Future<void> _cargarHabitos() async {
     if (widget.usuario.id == null) return;
     setState(() => _cargando = true);
-    final lista = await _datos.obtenerHabitos(widget.usuario.id!);
+    final todos = await _datos.obtenerHabitos(widget.usuario.id!);
+    // Ajuste "Ocultar hábitos completados hoy" (solo afecta a esta lista)
+    final lista = _datos.ocultarCompletados
+        ? todos.where((h) => !h.completadoHoy).toList()
+        : todos;
+    if (!mounted) return;
     setState(() {
       _habitos = lista;
       _cargando = false;
@@ -72,7 +77,7 @@ class _HabitosPageState extends State<HabitosPage> {
             if (mounted) {
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const LoginPage()),
-                (route) => false,
+                    (route) => false,
               );
             }
           },
@@ -163,31 +168,31 @@ class _HabitosPageState extends State<HabitosPage> {
       body: _cargando
           ? const Center(child: CircularProgressIndicator())
           : _habitos.isEmpty
-              ? Center(
-                  child: Text(
-                    _datos.ocultarCompletados
-                        ? 'No hay hábitos pendientes hoy.\nPulsa + para crear uno.'
-                        : 'Todavía no tienes hábitos registrados.\nPulsa + para crear uno.',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _habitos.length,
-                  itemBuilder: (context, i) {
-                    final h = _habitos[i];
-                    return TarjetaHabito(
-                      nombre: h.nombre,
-                      color: h.color,
-                      icono: h.icono,
-                      completadoHoy: h.completadoHoy,
-                      onCompletar: () => _completar(h),
-                      onEditar: () => _abrirEditor(h),
-                      onEliminar: () => _confirmarEliminar(h),
-                    );
-                  },
-                ),
+          ? Center(
+        child: Text(
+          _datos.ocultarCompletados
+              ? 'No hay hábitos pendientes hoy.\nPulsa + para crear uno.'
+              : 'Todavía no tienes hábitos registrados.\nPulsa + para crear uno.',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      )
+          : ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: _habitos.length,
+        itemBuilder: (context, i) {
+          final h = _habitos[i];
+          return TarjetaHabito(
+            nombre: h.nombre,
+            color: h.color,
+            icono: h.icono,
+            completadoHoy: h.completadoHoy,
+            onCompletar: () => _completar(h),
+            onEditar: () => _abrirEditor(h),
+            onEliminar: () => _confirmarEliminar(h),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _abrirEditor(null),
         child: const Icon(Icons.add),
