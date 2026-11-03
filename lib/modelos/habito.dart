@@ -1,16 +1,20 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 
-// Modelo de Datos: Hábito
-// Representa la tabla 'habitos' en la base de datos local SQLite
+
+// FUNCIÓN: Modelo de Datos para la entidad 'Hábito'
+// Representa la tabla 'habitos' en SQLite. Almacena la relación con el usuario (clave foránea),
+// nombre, color, icono y la lista de fechas completadas para calcular rachas automáticamente.
+
+
 class Habito {
-  final int? id;                       // Identificador único del hábito (Clave primaria autoincremental)
-  final int usuarioId;                 // ID del usuario propietario (Clave foránea hacia usuarios.id)
-  final String nombre;                 // Nombre descriptivo del hábito
+  final int? id;                       // Clave Primaria Autoincremental en SQLite
+  final int usuarioId;                 // Clave Foránea apuntando a usuarios.id
+  final String nombre;                 // Nombre descriptivo del hábito (ej. "Hacer ejercicio")
   final Color color;                   // Color representativo del hábito
-  final IconData icono;                // Icono visual del hábito
-  final List<String> fechasCompletado; // Fechas en las que el hábito ha sido completado
-  final bool completadoHoy;            // Indicador de si se ha completado en el día de hoy
+  final IconData icono;                // Icono gráfico de Material Icons
+  final List<String> fechasCompletado; // Historial de fechas completadas en formato "YYYY-MM-DD"
+  final bool completadoHoy;            // Indicador de si se ha marcado completado hoy
 
   Habito({
     this.id,
@@ -22,20 +26,20 @@ class Habito {
     this.completadoHoy = false,
   });
 
-  // Convierte el objeto Hábito a un Mapa para SQLite
+  // Convierte el objeto Hábito a Mapa para operaciones de inserción y actualización en SQLite
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
       'usuario_id': usuarioId,
       'nombre': nombre,
-      'color': color.value,
-      'icono': icono.codePoint,
-      'fechas_completado': jsonEncode(fechasCompletado), // Almacena la lista de fechas como JSON String
-      'completado_hoy': completadoHoy ? 1 : 0,           // Guarda 1 para true y 0 para false en SQLite
+      'color': color.value,                              // Guarda el entero ARGB del color
+      'icono': icono.codePoint,                           // Guarda el entero codePoint de MaterialIcons
+      'fechas_completado': jsonEncode(fechasCompletado), // Serializa la lista a una cadena JSON String
+      'completado_hoy': completadoHoy ? 1 : 0,           // Guarda 1 (true) o 0 (false)
     };
   }
 
-  // Construye un Hábito desde el Mapa devuelto por SQLite
+  // Reconstruye el objeto Hábito desde el Mapa devuelto por una consulta en SQLite
   factory Habito.fromMap(Map<String, dynamic> map) {
     List<String> fechas = [];
     if (map['fechas_completado'] != null) {
@@ -58,12 +62,12 @@ class Habito {
           ? IconData(map['icono'], fontFamily: 'MaterialIcons')
           : Icons.star,
       fechasCompletado: fechas,
-      // Se calcula con las fechas: así se reinicia solo al cambiar de día
+      // Se determina automáticamente comprobando si la lista incluye la fecha del día actual
       completadoHoy: fechas.contains(DateTime.now().toIso8601String().split('T').first),
     );
   }
 
-  // Copia inmutable del hábito
+  // Clonación inmutable del objeto
   Habito copyWith({
     int? id,
     int? usuarioId,

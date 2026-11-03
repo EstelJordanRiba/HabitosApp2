@@ -1,10 +1,8 @@
-// ============================================================================
-// ARCHIVO: usuario.dart (Ubicación: lib/modelos/usuario.dart)
+
 // FUNCIÓN: Modelo de Datos para la entidad 'Usuario'
-// EXPLICACIÓN DAM2:
 // Representa la estructura de la tabla 'usuarios' en la base de datos local SQLite.
 // Incluye métodos para mapear datos desde/hacia Mapa (JSON / Filas de SQLite).
-// ============================================================================
+
 
 class Usuario {
   final int? id;               // Clave Primaria Autoincremental en SQLite (null antes de insertarse)
@@ -62,7 +60,7 @@ class Usuario {
   }
 
   // Método copyWith para obtener una copia inmutable del objeto modificando campos específicos
-  Usuario copyWith({
+  Usuario copyWith({s
     int? id,
     String? usuario,
     String? nombre,

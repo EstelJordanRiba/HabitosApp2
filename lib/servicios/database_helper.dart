@@ -8,8 +8,14 @@ import '../modelos/usuario.dart';
 import '../modelos/habito.dart';
 import '../modelos/estadistica.dart';
 
-// Gestor de Base de Datos SQLite (sqflite) y Preferencias Compartidas (shared_preferences)
+// FUNCIÓN: Gestor de Base de Datos SQLite (sqflite) y Preferencias Compartidas (shared_preferences)
+// Aplica el patrón Singleton para garantizar una única conexión activa a SQLite.
+// Administra las tablas 'usuarios', 'habitos' y 'estadisticas', así como la persistencia
+// de sesión y configuración en SharedPreferences.
+
+
 class DatabaseHelper {
+  // Instancia única Singleton
   static final DatabaseHelper instance = DatabaseHelper._internal();
   static Database? _database;
 
@@ -17,14 +23,14 @@ class DatabaseHelper {
 
   DatabaseHelper._internal();
 
-  // Obtiene la instancia activa de la base de datos SQLite (creándola si no existe)
+  // Obtiene la instancia activa de la base de datos SQLite (inicializándola si aún no existe)
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
   }
 
-  // Inicializa la base de datos creando el archivo habitos_app.db
+  // Inicializa la base de datos creando la base de datos en la ruta local de la app
   Future<Database> _initDatabase() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'habitos_app.db');
@@ -32,13 +38,13 @@ class DatabaseHelper {
     return await openDatabase(
       path,
       version: 1,
-      // Activa las claves foráneas (ON DELETE CASCADE)
+      // Habilita las claves foráneas en SQLite (ON DELETE CASCADE)
       onConfigure: (db) async => await db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
     );
   }
 
-  // Borra el archivo de la base de datos. Al volver a abrirla se crea de nuevo con los datos de ejemplo
+  // Borra el archivo físico habitos_app.db para reiniciar la base de datos
   Future<void> borrarBaseDatos() async {
     final path = join(await getDatabasesPath(), 'habitos_app.db');
     await _database?.close();
@@ -46,7 +52,7 @@ class DatabaseHelper {
     await deleteDatabase(path);
   }
 
-  // Creación de las 3 tablas requeridas: usuarios, habitos y estadisticas
+  // Creación de las 3 tablas requeridas por el enunciado: usuarios, habitos y estadisticas
   Future<void> _onCreate(Database db, int version) async {
     // 1. Tabla 'usuarios'
     await db.execute('''
@@ -87,18 +93,18 @@ class DatabaseHelper {
       )
     ''');
 
-    // Insertar datos de prueba iniciales (Usuario normal y Administrador)
+    // Insertar datos iniciales de prueba (Administrador y Usuario Estándar con Hábitos)
     await _insertarDatosIniciales(db);
   }
 
+  // Inserta registros iniciales de demostración
   Future<void> _insertarDatosIniciales(Database db) async {
     final fechaBase = DateTime.now().subtract(const Duration(days: 10)).toIso8601String();
 
-    // Devuelve las fechas (yyyy-MM-dd) de hace n días, para que los datos de ejemplo sean coherentes
     String hace(int dias) =>
         DateTime.now().subtract(Duration(days: dias)).toIso8601String().split('T').first;
 
-    // 1. Usuario Administrador
+    // 1. Usuario Administrador (admin / admin)
     final adminId = await db.insert('usuarios', {
       'usuario': 'admin',
       'nombre': 'Administrador',
@@ -109,7 +115,7 @@ class DatabaseHelper {
       'rol': 'administrador',
     });
 
-    // 2. Usuario Estándar
+    // 2. Usuario Estándar (usuario / 1234)
     final userId = await db.insert('usuarios', {
       'usuario': 'usuario',
       'nombre': 'Usuario',
@@ -120,7 +126,7 @@ class DatabaseHelper {
       'rol': 'usuario',
     });
 
-    // Hábito 1: completado hoy y los 4 días anteriores -> racha 5, total 5
+    // Hábito 1: Exercici
     final h1Id = await db.insert('habitos', {
       'usuario_id': userId,
       'nombre': 'Hacer Ejercicio',
@@ -135,7 +141,7 @@ class DatabaseHelper {
       'total_dias_completados': 5,
     });
 
-    // Hábito 2: completado los 3 días anteriores, hoy pendiente -> racha 3, total 3
+    // Hábito 2: Lectura
     final h2Id = await db.insert('habitos', {
       'usuario_id': userId,
       'nombre': 'Leer 20 Minutos',
@@ -150,7 +156,7 @@ class DatabaseHelper {
       'total_dias_completados': 3,
     });
 
-    // Hábito del Administrador: sin completar -> racha 0, total 0
+    // Hábito Admin
     final hAdminId = await db.insert('habitos', {
       'usuario_id': adminId,
       'nombre': 'Revisar métricas del sistema',
@@ -166,9 +172,9 @@ class DatabaseHelper {
     });
   }
 
-  // ==========================================
-  // CRUD TABLA: USUARIOS
-  // ==========================================
+
+  // OPERACIONES CRUD: TABLA 'USUARIOS'
+
 
   // C: Crear Usuario
   Future<int> insertUsuario(Usuario usuario) async {
@@ -176,14 +182,14 @@ class DatabaseHelper {
     return await db.insert('usuarios', usuario.toMap());
   }
 
-  // R: Consultar todos los Usuarios
+  // R: Obtener todos los Usuarios
   Future<List<Usuario>> getUsuarios() async {
     final db = await database;
     final maps = await db.query('usuarios', orderBy: 'id ASC');
     return maps.map((m) => Usuario.fromMap(m)).toList();
   }
 
-  // R: Consultar Usuario por nombre de usuario (para Login y validación)
+  // R: Obtener Usuario por nombre de usuario (case-insensitive)
   Future<Usuario?> getUsuarioByUsername(String usuario) async {
     final db = await database;
     final maps = await db.query(
@@ -195,7 +201,7 @@ class DatabaseHelper {
     return null;
   }
 
-  // R: Consultar Usuario por ID
+  // R: Obtener Usuario por ID
   Future<Usuario?> getUsuarioById(int id) async {
     final db = await database;
     final maps = await db.query('usuarios', where: 'id = ?', whereArgs: [id]);
@@ -214,10 +220,9 @@ class DatabaseHelper {
     );
   }
 
-  // D: Eliminar Usuario y sus hábitos/estadísticas asociadas
+  // D: Eliminar Usuario y hábitos en cascada
   Future<int> deleteUsuario(int id) async {
     final db = await database;
-    // Eliminamos los hábitos del usuario en cascada
     final habitos = await getHabitosByUsuario(id);
     for (var h in habitos) {
       if (h.id != null) await deleteHabito(h.id!);
@@ -225,16 +230,15 @@ class DatabaseHelper {
     return await db.delete('usuarios', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ==========================================
-  // CRUD TABLA: HÁBITOS
-  // ==========================================
 
-  // C: Crear Hábito (y crea automáticamente su registro en la tabla estadísticas)
+  // OPERACIONES CRUD: TABLA 'HÁBITOS'
+
+
+  // C: Crear Hábito e inicializar su fila en 'estadisticas'
   Future<int> insertHabito(Habito habito) async {
     final db = await database;
     final habitoId = await db.insert('habitos', habito.toMap());
 
-    // Crear la entrada inicial en la tabla 'estadisticas'
     await db.insert('estadisticas', {
       'habito_id': habitoId,
       'racha_actual': 0,
@@ -244,7 +248,7 @@ class DatabaseHelper {
     return habitoId;
   }
 
-  // R: Consultar Hábitos de un usuario específico
+  // R: Obtener Hábitos pertenecientes a un usuario específico
   Future<List<Habito>> getHabitosByUsuario(int usuarioId) async {
     final db = await database;
     final maps = await db.query(
@@ -256,7 +260,7 @@ class DatabaseHelper {
     return maps.map((m) => Habito.fromMap(m)).toList();
   }
 
-  // R: Consultar TODOS los Hábitos (Rol Administrador)
+  // R: Obtener TODOS los Hábitos de la app (para Administrador)
   Future<List<Habito>> getAllHabitos() async {
     final db = await database;
     final maps = await db.query('habitos', orderBy: 'id ASC');
@@ -274,18 +278,17 @@ class DatabaseHelper {
     );
   }
 
-  // D: Eliminar Hábito y su estadística correspondiente
+  // D: Eliminar Hábito y su Estadística
   Future<int> deleteHabito(int id) async {
     final db = await database;
     await db.delete('estadisticas', where: 'habito_id = ?', whereArgs: [id]);
     return await db.delete('habitos', where: 'id = ?', whereArgs: [id]);
   }
 
-  // ==========================================
-  // CRUD TABLA: ESTADÍSTICAS
-  // ==========================================
+  // OPERACIONES CRUD: TABLA 'ESTADÍSTICAS'
 
-  // C: Crear Estadística explícitamente
+
+  // C: Crear Estadística
   Future<int> insertEstadistica(Estadistica est) async {
     final db = await database;
     return await db.insert('estadisticas', est.toMap());
@@ -303,7 +306,7 @@ class DatabaseHelper {
     return null;
   }
 
-  // R: Obtener TODAS las Estadísticas (Rol Administrador)
+  // R: Obtener TODAS las Estadísticas (para Administrador)
   Future<List<Estadistica>> getAllEstadisticas() async {
     final db = await database;
     final maps = await db.query('estadisticas');
@@ -321,7 +324,7 @@ class DatabaseHelper {
     );
   }
 
-  // D: Eliminar Estadística por ID de Hábito
+  // D: Eliminar Estadística por habito_id
   Future<int> deleteEstadisticaByHabito(int habitoId) async {
     final db = await database;
     return await db.delete(
@@ -331,34 +334,34 @@ class DatabaseHelper {
     );
   }
 
-  // ==========================================
-  // SHARED PREFERENCES (Persistencia Local de Sesión y Ajustes)
-  // ==========================================
+
+  // SHARED PREFERENCES: Persistencia de Sesión y Ajustes
+
 
   static const String _keyUsuarioId = 'sesion_usuario_id';
   static const String _keyDarkMode = 'pref_dark_mode';
   static const String _keyTamanoLetra = 'pref_tamano_letra';
   static const String _keyOcultarCompletados = 'pref_ocultar_completados';
 
-  // Guarda la sesión del usuario que ha accedido
+  // Guarda en SharedPreferences el ID del usuario en sesión activa
   Future<void> saveSesionUsuarioId(int usuarioId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_keyUsuarioId, usuarioId);
   }
 
-  // Obtiene el ID del usuario con sesión activa (o null si no hay sesión)
+  // Obtiene el ID del usuario con sesión iniciada
   Future<int?> getSesionUsuarioId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_keyUsuarioId);
   }
 
-  // Cierra la sesión activa borrando el ID guardado en SharedPreferences
+  // Borra la sesión de SharedPreferences al cerrar sesión
   Future<void> clearSesion() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyUsuarioId);
   }
 
-  // Guardar y cargar preferencias de la app (Tema oscuro, tamaño de letra, etc.)
+  // Persistir ajustes de Tema Oscuro
   Future<void> saveDarkMode(bool isDark) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyDarkMode, isDark);
@@ -369,6 +372,7 @@ class DatabaseHelper {
     return prefs.getBool(_keyDarkMode) ?? false;
   }
 
+  // Persistir tamaño de letra
   Future<void> saveTamanoLetra(double size) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyTamanoLetra, size);
@@ -379,6 +383,7 @@ class DatabaseHelper {
     return prefs.getDouble(_keyTamanoLetra) ?? 16.0;
   }
 
+  // Persistir opción de ocultar completados
   Future<void> saveOcultarCompletados(bool hide) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_keyOcultarCompletados, hide);
@@ -389,4 +394,3 @@ class DatabaseHelper {
     return prefs.getBool(_keyOcultarCompletados) ?? false;
   }
 }
-s

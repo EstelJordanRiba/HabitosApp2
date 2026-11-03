@@ -3,14 +3,12 @@ import 'pantallas/login_page.dart';
 import 'pantallas/habitos_page.dart';
 import 'servicios/datos_service.dart';
 
-// ============================================================================
-// ARCHIVO: main.dart
-// FUNCIÓN: Punto de entrada raíz de la aplicación HábitosApp (DAM2)
-// EXPLICACIÓN:
+// main.dart
+// FUNCIÓN: Punto de entrada raíz de la aplicación HábitosApp
 // Este archivo inicializa el motor de Flutter, restaura la sesión persistida
 // en SharedPreferences y la base de datos SQLite antes de renderizar la app,
 // y configura el tema visual reactivo (modo claro/oscuro y tamaño de letra).
-// ============================================================================
+
 
 Future<void> main() async {
   // Garantiza que los bindings del framework de Flutter estén totalmente listos

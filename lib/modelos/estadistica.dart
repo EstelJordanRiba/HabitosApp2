@@ -1,11 +1,14 @@
-// Modelo de Datos: Estadística
-// Representa la tabla 'estadisticas' en la base de datos local SQLite
+
+// Representa la tabla 'estadisticas' en la base de datos local SQLite.
+// Guarda el cálculo de racha de días consecutivos y el total de días completados
+// asociado a cada hábito mediante la clave foránea habito_id.
+
 
 class Estadistica {
-  final int? id;                    // Clave primaria autoincremental
-  final int habitoId;               // ID del hábito asociado (Clave foránea hacia habitos.id)
-  final int rachaActual;            // Racha actual en días consecutivos
-  final int totalDiasCompletados;   // Acumulado total de días completados
+  final int? id;                    // Clave Primaria Autoincremental en SQLite
+  final int habitoId;               // Clave Foránea hacia habitos.id
+  final int rachaActual;            // Racha de días consecutivos cumplidos
+  final int totalDiasCompletados;   // Total acumulado de días en que se ha completado el hábito
 
   Estadistica({
     this.id,
@@ -14,7 +17,7 @@ class Estadistica {
     required this.totalDiasCompletados,
   });
 
-  // Convierte el objeto Estadística a un Mapa para SQLite
+  // Mapea la instancia de Estadística a Mapa para SQLite
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -24,7 +27,7 @@ class Estadistica {
     };
   }
 
-  // Reconstruye el objeto Estadística desde la fila devuelta por SQLite
+  // Reconstruye el objeto Estadística a partir del Mapa leído en SQLite
   factory Estadistica.fromMap(Map<String, dynamic> map) {
     return Estadistica(
       id: map['id'] is int ? map['id'] : int.tryParse(map['id']?.toString() ?? ''),
@@ -36,7 +39,7 @@ class Estadistica {
     );
   }
 
-  // Copia inmutable del objeto Estadística
+  // Clonación inmutable con actualización de campos
   Estadistica copyWith({
     int? id,
     int? habitoId,

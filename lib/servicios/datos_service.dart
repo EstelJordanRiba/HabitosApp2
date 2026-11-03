@@ -47,10 +47,9 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
   // INICIO: se llama desde main() antes de arrancar la app
   // Carga los ajustes y la sesión guardados en SharedPreferences
-  // ==========================================
+
   Future<void> init() async {
     if (_inicializado) return;
     _isDarkMode = await _dbHelper.getDarkMode();
@@ -81,9 +80,8 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
   // CÁLCULO DE ESTADÍSTICAS A PARTIR DE LAS FECHAS
-  // ==========================================
+
 
   static String _fecha(DateTime d) => d.toIso8601String().split('T').first;
 
@@ -102,9 +100,8 @@ class DatosService extends ChangeNotifier {
     return racha;
   }
 
-  // ==========================================
   // USUARIOS: login, registro y CRUD (administrador)
-  // ==========================================
+
 
   // LOGIN: Consulta en la tabla 'usuarios' de SQLite y guarda la sesión en SharedPreferences
   Future<Usuario?> login(String usuario, String password) async {
@@ -177,9 +174,9 @@ class DatosService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ==========================================
+
   // HÁBITOS: CRUD completo en SQLite
-  // ==========================================
+
 
   // R: Hábitos de un usuario (el filtro "ocultar completados" se aplica en HabitosPage)
   Future<List<Habito>> obtenerHabitos(int usuarioId) async {
@@ -265,9 +262,8 @@ class DatosService extends ChangeNotifier {
     }
   }
 
-  // ==========================================
   // ESTADÍSTICAS: CRUD completo en SQLite
-  // ==========================================
+
 
   // R: Estadística de un hábito
   Future<Estadistica?> obtenerEstadistica(int habitoId) async {
