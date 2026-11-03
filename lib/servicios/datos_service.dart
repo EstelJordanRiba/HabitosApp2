@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import '../modelos/usuario.dart';
 import '../modelos/habito.dart';
+import '../modelos/estadistica.dart';
+import 'database_helper.dart';
 
-class DatosService {
+// Servicio de Datos Reactivo: Integra la Base de Datos Local (SQLite) y SharedPreferences
+// Extiende de ChangeNotifier para notificar cambios a la interfaz de usuario en tiempo real
+class DatosService extends ChangeNotifier {
   static final DatosService _instance = DatosService._internal();
 
   factory DatosService() {
@@ -10,175 +14,225 @@ class DatosService {
   }
 
   DatosService._internal() {
-    _inicializarDatos();
+    _cargarPreferencias();
   }
 
-  final List<Usuario> _usuarios = [];
-  final List<Habito> _habitos = [];
+  final _dbHelper = DatabaseHelper.instance;
 
-  // AJUSTES (en memoria)
-  bool isDarkMode = false;
-  double tamanoLetra = 16.0;
-  bool ocultarCompletados = false;
+  Usuario? _usuarioActual;
+  bool _isDarkMode = false;
+  double _tamanoLetra = 16.0;
+  bool _ocultarCompletados = false;
 
-  /// Devuelve la app a su estado inicial (datos de ejemplo y ajustes por defecto)
-  void restablecerDatos() {
-    _usuarios.clear();
-    _habitos.clear();
-    isDarkMode = false;
-    tamanoLetra = 16.0;
-    ocultarCompletados = false;
-    _inicializarDatos();
+  Usuario? get usuarioActual => _usuarioActual;
+  bool get esAdmin => _usuarioActual?.esAdmin ?? false;
+
+  bool get isDarkMode => _isDarkMode;
+  set isDarkMode(bool valor) {
+    _isDarkMode = valor;
+    _dbHelper.saveDarkMode(valor);
+    notifyListeners();
   }
 
-  void _inicializarDatos() {
-    final fechaBase = DateTime.now().subtract(const Duration(days: 15));
-
-    final admin = Usuario(
-      id: 'admin_1',
-      nombre: 'Administrador',
-      usuario: 'admin',
-      password: 'admin',
-      fechaCreacion: fechaBase,
-      esAdmin: true,
-    );
-
-    final userDefault = Usuario(
-      id: 'user_1',
-      nombre: 'Usuario Estándar',
-      usuario: 'usuario',
-      password: '1234',
-      fechaCreacion: fechaBase,
-      esAdmin: false,
-    );
-
-    _usuarios.addAll([admin, userDefault]);
-
-    _habitos.addAll([
-      Habito(
-        id: 'h1',
-        usuarioId: 'user_1',
-        nombre: 'Hacer Ejercicio',
-        color: Colors.teal,
-        icono: Icons.fitness_center,
-        completadoHoy: true,
-        racha: 5,
-        total: 12,
-      ),
-      Habito(
-        id: 'h2',
-        usuarioId: 'user_1',
-        nombre: 'Leer 20 Minutos',
-        color: Colors.orange,
-        icono: Icons.menu_book,
-        completadoHoy: false,
-        racha: 3,
-        total: 8,
-      ),
-      Habito(
-        id: 'h3',
-        usuarioId: 'user_1',
-        nombre: 'Beber 2L de Agua',
-        color: Colors.blue,
-        icono: Icons.local_drink,
-        completadoHoy: true,
-        racha: 10,
-        total: 25,
-      ),
-      Habito(
-        id: 'h4',
-        usuarioId: 'admin_1',
-        nombre: 'Revisar métricas del sistema',
-        color: Colors.purple,
-        icono: Icons.star,
-        completadoHoy: false,
-        racha: 2,
-        total: 4,
-      ),
-    ]);
+  double get tamanoLetra => _tamanoLetra;
+  set tamanoLetra(double valor) {
+    _tamanoLetra = valor;
+    _dbHelper.saveTamanoLetra(valor);
+    notifyListeners();
   }
 
-  Usuario? login(String usuario, String password) {
-    try {
-      return _usuarios.firstWhere(
-            (u) =>
-        u.usuario.trim().toLowerCase() == usuario.trim().toLowerCase() &&
-            u.password == password,
-      );
-    } catch (_) {
-      return null;
+  bool get ocultarCompletados => _ocultarCompletados;
+  set ocultarCompletados(bool valor) {
+    _ocultarCompletados = valor;
+    _dbHelper.saveOcultarCompletados(valor);
+    notifyListeners();
+  }
+
+  // Carga preferencias locales guardadas en SharedPreferences
+  Future<void> _cargarPreferencias() async {
+    _isDarkMode = await _dbHelper.getDarkMode();
+    _tamanoLetra = await _dbHelper.getTamanoLetra();
+    _ocultarCompletados = await _dbHelper.getOcultarCompletados();
+
+    // Intentar recuperar sesión activa en SharedPreferences
+    final sesionUserId = await _dbHelper.getSesionUsuarioId();
+    if (sesionUserId != null) {
+      _usuarioActual = await _dbHelper.getUsuarioById(sesionUserId);
     }
+    notifyListeners();
   }
 
-  bool registrarUsuario(Usuario usuario) {
-    final existe = _usuarios.any(
-          (u) => u.usuario.trim().toLowerCase() == usuario.usuario.trim().toLowerCase(),
-    );
-    if (existe) return false;
+  // Restablece preferencias y borra sesión activa
+  Future<void> restablecerDatos() async {
+    _usuarioActual = null;
+    _isDarkMode = false;
+    _tamanoLetra = 16.0;
+    _ocultarCompletados = false;
+    await _dbHelper.clearSesion();
+    await _dbHelper.saveDarkMode(false);
+    await _dbHelper.saveTamanoLetra(16.0);
+    await _dbHelper.saveOcultarCompletados(false);
+    notifyListeners();
+  }
 
-    _usuarios.add(usuario);
+  // LOGIN: Consulta en la tabla 'usuarios' de SQLite y guarda la sesión en SharedPreferences
+  Future<Usuario?> login(String usuario, String password) async {
+    final user = await _dbHelper.getUsuarioByUsername(usuario);
+    if (user != null && user.password == password) {
+      _usuarioActual = user;
+      if (user.id != null) {
+        await _dbHelper.saveSesionUsuarioId(user.id!);
+      }
+      notifyListeners();
+      return user;
+    }
+    return null;
+  }
+
+  // LOGOUT: Borra la sesión de SharedPreferences
+  Future<void> logout() async {
+    _usuarioActual = null;
+    await _dbHelper.clearSesion();
+    notifyListeners();
+  }
+
+  // REGISTRO DE USUARIO: Inserta en la tabla 'usuarios' de SQLite
+  Future<bool> registrarUsuario({
+    required String usuario,
+    required String nombre,
+    required String apellidos,
+    required String email,
+    required String password,
+    String rol = 'usuario',
+  }) async {
+    final existe = await _dbHelper.getUsuarioByUsername(usuario);
+    if (existe != null) return false; // El nombre de usuario ya existe
+
+    final nuevoUsuario = Usuario(
+      usuario: usuario.trim(),
+      nombre: nombre.trim(),
+      apellidos: apellidos.trim(),
+      email: email.trim(),
+      password: password,
+      fechaCreacion: DateTime.now(), // Asignada automáticamente
+      rol: rol,
+    );
+
+    await _dbHelper.insertUsuario(nuevoUsuario);
+    notifyListeners();
     return true;
   }
 
-  List<Usuario> obtenerUsuarios() => List.unmodifiable(_usuarios);
+  // HÁBITOS: CRUD completo en SQLite
 
-  void eliminarUsuario(String id) {
-    _usuarios.removeWhere((u) => u.id == id);
-    _habitos.removeWhere((h) => h.usuarioId == id);
+  // R: Obtener hábitos de un usuario específico
+  Future<List<Habito>> obtenerHabitos(int usuarioId) async {
+    final todos = await _dbHelper.getHabitosByUsuario(usuarioId);
+    if (_ocultarCompletados) {
+      return todos.where((h) => !h.completadoHoy).toList();
+    }
+    return todos;
   }
 
-  List<Habito> obtenerHabitos(String usuarioId) {
-    return _habitos.where((h) => h.usuarioId == usuarioId).toList();
+  // R: Obtener todos los hábitos (Rol Administrador)
+  Future<List<Habito>> obtenerTodosLosHabitos() async {
+    return await _dbHelper.getAllHabitos();
   }
 
-  List<Habito> obtenerTodosLosHabitos() => List.unmodifiable(_habitos);
-
-  void crearHabito(Usuario usuario, String nombre, Color color, IconData icono) {
+  // C: Crear Hábito en la tabla 'habitos'
+  Future<void> crearHabito(int usuarioId, String nombre, Color color, IconData icono) async {
     final nuevoHabito = Habito(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      usuarioId: usuario.id,
+      usuarioId: usuarioId,
       nombre: nombre,
       color: color,
       icono: icono,
       completadoHoy: false,
-      racha: 0,
-      total: 0,
+      fechasCompletado: [],
     );
-    _habitos.add(nuevoHabito);
+
+    await _dbHelper.insertHabito(nuevoHabito);
+    notifyListeners();
   }
 
-  void editarHabito(Habito habito, String nombre, Color color, IconData icono) {
-    final index = _habitos.indexWhere((h) => h.id == habito.id);
-    if (index >= 0) {
-      _habitos[index] = _habitos[index].copyWith(
-        nombre: nombre,
-        color: color,
-        icono: icono,
-      );
+  // U: Modificar Hábito
+  Future<void> editarHabito(Habito habito, String nombre, Color color, IconData icono) async {
+    final habitoActualizado = habito.copyWith(
+      nombre: nombre,
+      color: color,
+      icono: icono,
+    );
+
+    await _dbHelper.updateHabito(habitoActualizado);
+    notifyListeners();
+  }
+
+  // D: Eliminar Hábito
+  Future<void> eliminarHabito(int habitoId) async {
+    await _dbHelper.deleteHabito(habitoId);
+    notifyListeners();
+  }
+
+  // COMPLETAR HÁBITO: Actualiza 'habitos' y recalcula la racha/total en la tabla 'estadisticas'
+  Future<void> completarHabito(Habito habito) async {
+    if (habito.id == null) return;
+
+    final hoyStr = DateTime.now().toIso8601String().split('T').first;
+    final nuevoEstado = !habito.completadoHoy;
+
+    final nuevasFechas = List<String>.from(habito.fechasCompletado);
+    if (nuevoEstado) {
+      if (!nuevasFechas.contains(hoyStr)) nuevasFechas.add(hoyStr);
+    } else {
+      nuevasFechas.remove(hoyStr);
     }
-  }
 
-  void eliminarHabito(String id) {
-    _habitos.removeWhere((h) => h.id == id);
-  }
+    final habitoModificado = habito.copyWith(
+      completadoHoy: nuevoEstado,
+      fechasCompletado: nuevasFechas,
+    );
 
-  void completarHabito(Habito habito) {
-    final index = _habitos.indexWhere((h) => h.id == habito.id);
-    if (index >= 0) {
-      final h = _habitos[index];
-      final nuevoEstado = !h.completadoHoy;
-      final nuevaRacha = nuevoEstado
-          ? h.racha + 1
-          : (h.racha > 0 ? h.racha - 1 : 0);
-      final nuevosTotales = nuevoEstado
-          ? h.total + 1
-          : (h.total > 0 ? h.total - 1 : 0);
+    await _dbHelper.updateHabito(habitoModificado);
 
-      _habitos[index] = h.copyWith(
-        completadoHoy: nuevoEstado,
-        racha: nuevaRacha,
-        total: nuevosTotales,
-      );
+    // Actualizar tabla 'estadisticas'
+    final estActual = await _dbHelper.getEstadisticaByHabito(habito.id!);
+    int racha = estActual?.rachaActual ?? 0;
+    int total = estActual?.totalDiasCompletados ?? 0;
+
+    if (nuevoEstado) {
+      racha += 1;
+      total += 1;
+    } else {
+      racha = racha > 0 ? racha - 1 : 0;
+      total = total > 0 ? total - 1 : 0;
     }
+
+    final estNueva = Estadistica(
+      id: estActual?.id,
+      habitoId: habito.id!,
+      rachaActual: racha,
+      totalDiasCompletados: total,
+    );
+
+    await _dbHelper.updateEstadistica(estNueva);
+    notifyListeners();
+  }
+
+  // ESTADÍSTICAS: Obtener datos de la tabla 'estadisticas'
+  Future<Estadistica?> obtenerEstadistica(int habitoId) async {
+    return await _dbHelper.getEstadisticaByHabito(habitoId);
+  }
+
+  Future<List<Estadistica>> obtenerTodasLasEstadisticas() async {
+    return await _dbHelper.getAllEstadisticas();
+  }
+
+  // USUARIOS (Rol Administrador): CRUD en SQLite
+  Future<List<Usuario>> obtenerUsuarios() async {
+    return await _dbHelper.getUsuarios();
+  }
+
+  Future<void> eliminarUsuario(int usuarioId) async {
+    await _dbHelper.deleteUsuario(usuarioId);
+    notifyListeners();
   }
 }

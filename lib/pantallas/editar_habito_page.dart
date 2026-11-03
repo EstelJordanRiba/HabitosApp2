@@ -5,6 +5,8 @@ import '../servicios/datos_service.dart';
 import '../widgets/campo_texto_app.dart';
 import '../widgets/boton_principal.dart';
 
+// Pantalla 4: Crear / Editar Hábitos (EditarHabitoPage)
+// Permite guardar o actualizar un hábito en la base de datos local SQLite
 class EditarHabitoPage extends StatefulWidget {
   final Usuario usuario;
   final Habito? habito;
@@ -73,7 +75,7 @@ class _EditarHabitoPageState extends State<EditarHabitoPage> {
                 child: CircleAvatar(
                   radius: 20,
                   backgroundColor: c,
-                  child: _color.value == c.value
+                  child: _color == c
                       ? const Icon(Icons.check, color: Colors.white)
                       : null,
                 ),
@@ -95,18 +97,23 @@ class _EditarHabitoPageState extends State<EditarHabitoPage> {
             .toList(),
       );
 
-  void _guardar() {
+  Future<void> _guardar() async {
     if (_nombreCtrl.text.trim().isEmpty) {
       _mensaje('El nombre es obligatorio');
       return;
     }
     final nombre = _nombreCtrl.text.trim();
+    if (widget.usuario.id == null) return;
+
     if (widget.habito == null) {
-      _datos.crearHabito(widget.usuario, nombre, _color, _icono);
+      // Inserción en la base de datos SQLite (tabla habitos + estadisticas)
+      await _datos.crearHabito(widget.usuario.id!, nombre, _color, _icono);
     } else {
-      _datos.editarHabito(widget.habito!, nombre, _color, _icono);
+      // Actualización en la base de datos SQLite
+      await _datos.editarHabito(widget.habito!, nombre, _color, _icono);
     }
-    Navigator.pop(context, true);
+
+    if (mounted) Navigator.pop(context, true);
   }
 
   @override

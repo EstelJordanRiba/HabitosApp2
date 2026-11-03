@@ -5,6 +5,8 @@ import '../widgets/boton_principal.dart';
 import 'registro_page.dart';
 import 'habitos_page.dart';
 
+// Pantalla 1: Inicio de Sesión (LoginPage)
+// Valida el usuario y contraseña consultando la base de datos local SQLite y guarda la sesión en SharedPreferences
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -30,18 +32,26 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  void _acceder() {
+  // Acceso asíncrono consultando SQLite y SharedPreferences
+  Future<void> _acceder() async {
     final usuario = _usuarioCtrl.text.trim();
     final password = _passwordCtrl.text;
+
     if (usuario.isEmpty || password.isEmpty) {
       _mensaje('Introduce usuario y contraseña');
       return;
     }
-    final u = _datos.login(usuario, password);
+
+    // Consulta en la base de datos local
+    final u = await _datos.login(usuario, password);
+
     if (u == null) {
       _mensaje('Usuario o contraseña incorrectos');
       return;
     }
+
+    // Entra a la lista de hábitos y guarda la sesión
+    if (!mounted) return;
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => HabitosPage(usuario: u)),
@@ -63,6 +73,7 @@ class _LoginPageState extends State<LoginPage> {
               color: Theme.of(context).colorScheme.primary,
             ),
             const SizedBox(height: 20),
+            // Reutilización de CampoTextoApp
             CampoTextoApp(etiqueta: 'Usuario', controller: _usuarioCtrl),
             CampoTextoApp(
               etiqueta: 'Contraseña',
@@ -70,6 +81,7 @@ class _LoginPageState extends State<LoginPage> {
               ocultarTexto: true,
             ),
             const SizedBox(height: 12),
+            // Reutilización de BotonPrincipal
             BotonPrincipal(texto: 'Iniciar sesión', onPressed: _acceder),
             const SizedBox(height: 12),
             TextButton(

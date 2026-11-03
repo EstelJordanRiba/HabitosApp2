@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../modelos/usuario.dart';
+import '../modelos/habito.dart';
 import '../servicios/datos_service.dart';
 
 /// PANTALLA: AjustesScreen
 /// Ubicación: lib/pantallas/ajustes_screen.dart
-/// Permite configurar el Tema Claro/Oscuro (bool), Tamaño de letra (double con Slider),
-/// Ocultar completados (bool) y el botón para Borrar todos los datos.
-/// Los ajustes se guardan en memoria en DatosService.
+/// Configura preferencias del usuario con SharedPreferences mediante DatosService.
 class AjustesScreen extends StatefulWidget {
   final Usuario usuario;
   final VoidCallback onAppSettingsChanged;
@@ -25,10 +24,12 @@ class AjustesScreen extends StatefulWidget {
 
 class _AjustesScreenState extends State<AjustesScreen> {
   final DatosService _datos = DatosService();
+  static const double _base = 16.0;
 
   late bool _isDarkMode;
   late double _tamanoLetra;
   late bool _ocultarCompletados;
+  List<Habito> _habitosUsuario = [];
 
   @override
   void initState() {
@@ -36,6 +37,18 @@ class _AjustesScreenState extends State<AjustesScreen> {
     _isDarkMode = _datos.isDarkMode;
     _tamanoLetra = _datos.tamanoLetra;
     _ocultarCompletados = _datos.ocultarCompletados;
+    _cargarHabitos();
+  }
+
+  Future<void> _cargarHabitos() async {
+    if (widget.usuario.id != null) {
+      final list = await _datos.obtenerHabitos(widget.usuario.id!);
+      if (mounted) {
+        setState(() {
+          _habitosUsuario = list;
+        });
+      }
+    }
   }
 
   /// Confirma y ejecuta el borrado total de datos
@@ -51,8 +64,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
           ],
         ),
         content: const Text(
-          'Esta acción eliminará todos los hábitos, usuarios registrados y ajustes. '
-              'La aplicación volverá a su estado inicial y se cerrará la sesión.',
+          'Esta acción restablecerá los datos de la base de datos local SQLite y los ajustes guardados en SharedPreferences.',
         ),
         actions: [
           TextButton(
@@ -72,7 +84,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
     );
 
     if (confirmado == true) {
-      _datos.restablecerDatos();
+      await _datos.restablecerDatos();
       if (mounted) {
         widget.onResetApp();
       }
@@ -81,8 +93,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final habitos = _datos.obtenerHabitos(widget.usuario.id);
-    final completadosHoy = habitos.where((h) => h.completadoHoy).length;
+    final completadosHoy = _habitosUsuario.where((h) => h.completadoHoy).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -104,27 +115,28 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 ),
               ),
               title: Text(
-                widget.usuario.nombre,
-                style: TextStyle(
-                  fontSize: _tamanoLetra * 1.1,
+                '${widget.usuario.nombre} ${widget.usuario.apellidos}',
+                style: const TextStyle(
+                  fontSize: _base * 1.1,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               subtitle: Text(
                 '@${widget.usuario.usuario} · '
                     '${widget.usuario.esAdmin ? 'Administrador' : 'Usuario'}\n'
-                    'Hábitos: ${habitos.length} · Completados hoy: $completadosHoy',
-                style: TextStyle(fontSize: _tamanoLetra * 0.85),
+                    'Email: ${widget.usuario.email}\n'
+                    'Hábitos: ${_habitosUsuario.length} · Completados hoy: $completadosHoy',
+                style: const TextStyle(fontSize: _base * 0.85),
               ),
               isThreeLine: true,
             ),
           ),
           const SizedBox(height: 16),
 
-          Text(
+          const Text(
             'Personalización y Preferencias',
             style: TextStyle(
-              fontSize: _tamanoLetra * 1.1,
+              fontSize: _base * 1.1,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -133,15 +145,15 @@ class _AjustesScreenState extends State<AjustesScreen> {
           Card(
             child: Column(
               children: [
-                // Tema Oscuro (bool)
+                // Tema Oscuro (SharedPreferences)
                 SwitchListTile(
                   secondary: Icon(
                     _isDarkMode ? Icons.dark_mode : Icons.light_mode,
                     color: _isDarkMode ? Colors.amber : Colors.orange,
                   ),
-                  title: Text(
+                  title: const Text(
                     'Tema Oscuro',
-                    style: TextStyle(fontSize: _tamanoLetra),
+                    style: TextStyle(fontSize: _base),
                   ),
                   value: _isDarkMode,
                   onChanged: (val) {
@@ -152,12 +164,12 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 ),
                 const Divider(height: 1),
 
-                // Ocultar completados (bool)
+                // Ocultar completados (SharedPreferences)
                 SwitchListTile(
                   secondary: const Icon(Icons.visibility_off, color: Colors.blue),
-                  title: Text(
+                  title: const Text(
                     'Ocultar hábitos completados hoy',
-                    style: TextStyle(fontSize: _tamanoLetra),
+                    style: TextStyle(fontSize: _base),
                   ),
                   value: _ocultarCompletados,
                   onChanged: (val) {
@@ -168,7 +180,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 ),
                 const Divider(height: 1),
 
-                // Tamaño de letra con Slider (double)
+                // Tamaño de letra con Slider (SharedPreferences)
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
@@ -177,20 +189,20 @@ class _AjustesScreenState extends State<AjustesScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
+                          const Row(
                             children: [
-                              const Icon(Icons.text_fields, color: Colors.teal),
-                              const SizedBox(width: 12),
+                              Icon(Icons.text_fields, color: Colors.teal),
+                              SizedBox(width: 12),
                               Text(
                                 'Tamaño de letra',
-                                style: TextStyle(fontSize: _tamanoLetra),
+                                style: TextStyle(fontSize: _base),
                               ),
                             ],
                           ),
                           Text(
                             '${_tamanoLetra.toInt()} px',
-                            style: TextStyle(
-                              fontSize: _tamanoLetra * 0.9,
+                            style: const TextStyle(
+                              fontSize: _base * 0.9,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -205,9 +217,9 @@ class _AjustesScreenState extends State<AjustesScreen> {
                         label: '${_tamanoLetra.toInt()} px',
                         onChanged: (val) {
                           setState(() => _tamanoLetra = val);
+                          _datos.tamanoLetra = val;
                         },
                         onChangeEnd: (val) {
-                          _datos.tamanoLetra = val;
                           widget.onAppSettingsChanged();
                         },
                       ),
@@ -219,7 +231,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
           ),
           const SizedBox(height: 24),
 
-          // BORRAR TODOS LOS DATOS
+          // BORRAR TODOS LOS DATOS EN SQLITE Y SHARED PREFERENCES
           Card(
             color: Colors.red.shade50,
             shape: RoundedRectangleBorder(
@@ -233,7 +245,7 @@ class _AjustesScreenState extends State<AjustesScreen> {
                 style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
               ),
               subtitle: const Text(
-                'Restablece la app como recién instalada',
+                'Restablece la base de datos local y preferencias',
                 style: TextStyle(color: Colors.redAccent),
               ),
               trailing: ElevatedButton(
